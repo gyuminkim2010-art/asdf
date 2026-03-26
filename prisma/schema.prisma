@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int      @id @default(autoincrement())
+  email            String   @unique
+  password         String
+  nickname         String
+  role             String   @default("user")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  lastSeenAt       DateTime?
+  loginCount       Int      @default(0)
+  totalStudySeconds Int     @default(0)
+  totalAnswers     Int      @default(0)
+  correctAnswers   Int      @default(0)
+
+  rankings         RankingRecord[]
+  wrongNotes        WrongAnswerNote[]
+}
+
+model HanjaItem {
+  id        Int      @id @default(autoincrement())
+  character String
+  meaning   String
+  reading   String
+  createdAt DateTime @default(now())
+}
+
+model RankingRecord {
+  id             Int      @id @default(autoincrement())
+  score          Int
+  totalCount     Int
+  elapsedSeconds Int
+  createdAt      DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model WrongAnswerNote {
+  id             Int      @id @default(autoincrement())
+  contentType    String
+  contentId      Int
+  questionText   String
+  questionPrompt String
+  correctAnswer  String
+  selectedAnswer String
+  extraData String?
+  createdAt      DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentType, contentId])
+}
+
+model PhraseItem {
+  id           Int      @id @default(autoincrement())
+  category     String   // "analects" | "idiom"
+  title        String?  // 선택: 학이시습지, 새옹지마 같은 제목
+  hanjaText    String
+  koreanText   String
+  hanjaTokens  String   // "|" 로 구분: 學而|時習之|不亦|說乎
+  koreanTokens String   // "|" 로 구분: 배우고|때때로|익히면|또한|기쁘지|아니한가
+  createdAt    DateTime @default(now())
+}
