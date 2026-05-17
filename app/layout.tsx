@@ -1,5 +1,9 @@
 import ActivityTracker from "./components/activity-tracker";
 import PageTransition from "./components/page-transition";
+import AnimatedBg from "./components/ui/animated-bg";
+import CustomCursor from "./components/ui/custom-cursor";
+import CursorSpotlight from "./components/ui/cursor-spotlight";
+import ScrollProgressBar from "./components/ui/scroll-progress";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -15,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "한자 퀴즈",
-  description: "한자 학습 사이트",
+  title: "no NAME",
+  description: "",
 };
 
 export default function RootLayout({
@@ -29,6 +33,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <AnimatedBg />
+        <CursorSpotlight />
+        <CustomCursor />
+        <ScrollProgressBar />
         <ActivityTracker />
         <PageTransition>{children}</PageTransition>
       </body>

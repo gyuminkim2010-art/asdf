@@ -50,6 +50,27 @@ function getMealOrder(mealType: string) {
   return 99;
 }
 
+const GLASS = {
+  background: "rgba(255,255,255,0.038)",
+  backdropFilter: "blur(48px) saturate(170%)",
+  WebkitBackdropFilter: "blur(48px) saturate(170%)",
+  border: "1px solid rgba(255,255,255,0.085)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.08), 0 24px 64px rgba(0,0,0,0.35)",
+} as React.CSSProperties;
+
+const GLASS_SUBTLE = {
+  background: "rgba(255,255,255,0.025)",
+  backdropFilter: "blur(24px)",
+  WebkitBackdropFilter: "blur(24px)",
+  border: "1px solid rgba(255,255,255,0.06)",
+} as React.CSSProperties;
+
+const INPUT_STYLE = {
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.09)",
+  color: "rgba(255,255,255,0.75)",
+} as React.CSSProperties;
+
 export default function MealPage() {
   const [schoolName, setSchoolName] = useState("대아고등학교");
   const [searchName, setSearchName] = useState("");
@@ -62,54 +83,30 @@ export default function MealPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-
   const [rangeEnd, setRangeEnd] = useState(addDays(new Date(), 6));
 
   const observerRef = useRef<HTMLDivElement | null>(null);
   const lockRef = useRef(false);
 
-  const fetchMeals = async (
-    school: string,
-    fromDate: Date,
-    toDate: Date,
-    append = false
-  ) => {
+  const fetchMeals = async (school: string, fromDate: Date, toDate: Date, append = false) => {
     const params = new URLSearchParams();
     params.set("schoolName", school);
     params.set("from", toInputDate(fromDate));
     params.set("to", toInputDate(toDate));
-
-    const res = await fetch(`/api/meal?${params.toString()}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(`/api/meal?${params.toString()}`, { cache: "no-store" });
     const data = await res.json();
-
-    if (!res.ok || !data.ok) {
-      if (!append) {
-        setItems([]);
-      }
-      return 0;
-    }
-
+    if (!res.ok || !data.ok) { if (!append) setItems([]); return 0; }
     const fetchedItems: MealItem[] = Array.isArray(data.meals) ? data.meals : [];
     setSchoolName(data.school || school);
-
     setItems((prev) => {
       const merged = append ? [...prev, ...fetchedItems] : fetchedItems;
-
       const uniqueMap = new Map<string, MealItem>();
-      for (const item of merged) {
-        uniqueMap.set(`${item.date}-${item.mealType}-${item.dish}`, item);
-      }
-
+      for (const item of merged) uniqueMap.set(`${item.date}-${item.mealType}-${item.dish}`, item);
       return Array.from(uniqueMap.values()).sort((a, b) => {
-        if (a.date === b.date) {
-          return getMealOrder(a.mealType) - getMealOrder(b.mealType);
-        }
+        if (a.date === b.date) return getMealOrder(a.mealType) - getMealOrder(b.mealType);
         return a.date.localeCompare(b.date);
       });
     });
-
     return fetchedItems.length;
   };
 
@@ -117,492 +114,360 @@ export default function MealPage() {
     const load = async () => {
       const base = new Date(selectedDate);
       const end = addDays(base, 6);
-
       setRangeEnd(end);
       setHasMore(true);
       setLoading(true);
-
-      try {
-        const count = await fetchMeals(schoolName, base, end, false);
-        setHasMore(count > 0);
-      } finally {
-        setLoading(false);
-      }
+      try { const count = await fetchMeals(schoolName, base, end, false); setHasMore(count > 0); }
+      finally { setLoading(false); }
     };
-
     load();
   }, []);
 
   const groupedMeals = useMemo(() => {
     const map = new Map<string, MealItem[]>();
-
     for (const item of items) {
-      if (!map.has(item.date)) {
-        map.set(item.date, []);
-      }
+      if (!map.has(item.date)) map.set(item.date, []);
       map.get(item.date)!.push(item);
     }
-
     return Array.from(map.entries());
   }, [items]);
 
   const baseDateKey = inputDateToKey(selectedDate);
-
-  const todayGroup = useMemo(() => {
-    return groupedMeals.find(([date]) => date === baseDateKey) ?? null;
-  }, [groupedMeals, baseDateKey]);
-
-  const futureGroups = useMemo(() => {
-    return groupedMeals.filter(([date]) => date > baseDateKey);
-  }, [groupedMeals, baseDateKey]);
+  const todayGroup = useMemo(() => groupedMeals.find(([date]) => date === baseDateKey) ?? null, [groupedMeals, baseDateKey]);
+  const futureGroups = useMemo(() => groupedMeals.filter(([date]) => date > baseDateKey), [groupedMeals, baseDateKey]);
 
   const handleSearchSchool = async () => {
     if (!searchName.trim()) return;
-
     setSearchLoading(true);
     try {
-      const res = await fetch(
-        `/api/school-search?schoolName=${encodeURIComponent(searchName)}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(`/api/school-search?schoolName=${encodeURIComponent(searchName)}`, { cache: "no-store" });
       const data = await res.json();
-
-      if (res.ok && data.ok) {
-        setSearchResults(data.schools);
-      } else {
-        setSearchResults([]);
-      }
-    } finally {
-      setSearchLoading(false);
-    }
+      setSearchResults(res.ok && data.ok ? data.schools : []);
+    } finally { setSearchLoading(false); }
   };
 
   const handleSelectSchool = async (name: string) => {
-    setSearchOpen(false);
-    setSearchResults([]);
-    setSearchName("");
-    setSchoolName(name);
-
+    setSearchOpen(false); setSearchResults([]); setSearchName(""); setSchoolName(name);
     const base = new Date(selectedDate);
     const end = addDays(base, 6);
-
-    setRangeEnd(end);
-    setHasMore(true);
-    setLoading(true);
-
-    try {
-      const count = await fetchMeals(name, base, end, false);
-      setHasMore(count > 0);
-    } finally {
-      setLoading(false);
-    }
+    setRangeEnd(end); setHasMore(true); setLoading(true);
+    try { const count = await fetchMeals(name, base, end, false); setHasMore(count > 0); }
+    finally { setLoading(false); }
   };
 
   const handleDateApply = async () => {
     const base = new Date(selectedDate);
     const end = addDays(base, 6);
-
-    setRangeEnd(end);
-    setHasMore(true);
-    setLoading(true);
-
-    try {
-      const count = await fetchMeals(schoolName, base, end, false);
-      setHasMore(count > 0);
-    } finally {
-      setLoading(false);
-    }
+    setRangeEnd(end); setHasMore(true); setLoading(true);
+    try { const count = await fetchMeals(schoolName, base, end, false); setHasMore(count > 0); }
+    finally { setLoading(false); }
   };
 
   const loadMoreMeals = async () => {
     if (lockRef.current || !hasMore) return;
-
-    lockRef.current = true;
-    setLoadingMore(true);
-
+    lockRef.current = true; setLoadingMore(true);
     try {
       const nextStart = addDays(rangeEnd, 1);
       const nextEnd = addDays(nextStart, 6);
-
       const count = await fetchMeals(schoolName, nextStart, nextEnd, true);
-
-      if (count === 0) {
-        setHasMore(false);
-      } else {
-        setRangeEnd(nextEnd);
-      }
-    } finally {
-      setLoadingMore(false);
-      lockRef.current = false;
-    }
+      if (count === 0) setHasMore(false); else setRangeEnd(nextEnd);
+    } finally { setLoadingMore(false); lockRef.current = false; }
   };
 
   useEffect(() => {
     const target = observerRef.current;
     if (!target || !hasMore) return;
-
     const observer = new IntersectionObserver(
       async (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && !loading && !loadingMore && hasMore) {
-          await loadMoreMeals();
-        }
+        if (entries[0].isIntersecting && !loading && !loadingMore && hasMore) await loadMoreMeals();
       },
-      {
-        root: null,
-        rootMargin: "420px",
-        threshold: 0,
-      }
+      { root: null, rootMargin: "420px", threshold: 0 }
     );
-
     observer.observe(target);
-
     return () => observer.disconnect();
   }, [loading, loadingMore, hasMore, rangeEnd, schoolName]);
 
   return (
-    <motion.main
-      initial={{ opacity: 0, y: 100, scale: 0.975 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{
-        duration: 1.35,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      className="min-h-screen bg-[#ecebe6] text-[#171717]"
-    >
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        <motion.section
-          initial={{ opacity: 0, y: 50, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{
-            duration: 1.1,
-            delay: 0.12,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className="mb-6 rounded-[32px] border border-black/5 bg-white/60 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.05)] backdrop-blur"
+    <main className="min-h-screen text-white overflow-x-hidden">
+      <div className="mx-auto max-w-5xl px-4 py-24 md:px-6 space-y-5">
+
+        {/* Header card */}
+        <motion.div
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-3xl p-6"
+          style={GLASS}
         >
-          <div className="rounded-[26px] border border-black/5 bg-[#f7f6f2] p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm text-[#7a7a7a]">School Life</p>
-                <h1 className="text-3xl font-extrabold">급식 정보</h1>
-                <p className="mt-1 text-sm text-[#666]">{schoolName}</p>
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/28 mb-1">School Life</p>
+              <h1 className="text-[clamp(28px,5vw,44px)] font-black tracking-[-0.04em] text-white">급식 정보</h1>
+              <p className="text-[12px] text-white/35 mt-1">{schoolName}</p>
+            </div>
+            <Link
+              href="/"
+              className="shrink-0 rounded-full px-5 py-2.5 text-[12px] font-semibold text-white/45 hover:text-white/75 transition-colors"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+            >
+              메인화면 →
+            </Link>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_0.8fr_auto]">
+            <button
+              onClick={() => setSearchOpen((p) => !p)}
+              className="rounded-2xl px-4 py-3 text-left text-[13px] font-semibold text-white/55 hover:text-white/80 transition-colors"
+              style={INPUT_STYLE}
+            >
+              타학교 검색
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-2xl px-4 py-3 text-[13px] outline-none"
+              style={INPUT_STYLE}
+            />
+            <button
+              onClick={handleDateApply}
+              className="rounded-2xl bg-white px-5 py-3 text-[12px] font-bold text-black hover:bg-white/90 transition-colors"
+              style={{ boxShadow: "0 0 20px rgba(255,255,255,0.1)" }}
+            >
+              날짜 적용
+            </button>
+          </div>
+
+          {searchOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-4 rounded-2xl p-4"
+              style={GLASS_SUBTLE}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={searchName}
+                  onChange={(e) => setSearchName(e.target.value)}
+                  placeholder="학교 이름 입력"
+                  className="flex-1 rounded-xl px-4 py-3 text-[13px] text-white/75 placeholder:text-white/20 outline-none"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                />
+                <button
+                  onClick={handleSearchSchool}
+                  className="rounded-xl bg-white px-5 py-3 text-[12px] font-bold text-black hover:bg-white/90 transition-colors"
+                >
+                  검색
+                </button>
               </div>
+              <div className="mt-3 space-y-2">
+                {searchLoading ? (
+                  <p className="text-[12px] text-white/35">학교를 찾는 중입니다...</p>
+                ) : searchResults.length === 0 ? (
+                  <p className="text-[12px] text-white/28">학교 이름을 입력한 뒤 검색해 주세요.</p>
+                ) : (
+                  searchResults.map((school, index) => (
+                    <motion.button
+                      key={`${school.schoolCode}-${index}`}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      onClick={() => handleSelectSchool(school.schoolName)}
+                      className="block w-full rounded-xl px-4 py-3.5 text-left hover:-translate-y-0.5 transition-all duration-200"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    >
+                      <p className="font-bold text-white text-[13px]">{school.schoolName}</p>
+                      <p className="text-[11px] text-white/35 mt-0.5">{school.schoolType}{school.address ? ` · ${school.address}` : ""}</p>
+                    </motion.button>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
 
-              <Link
-                href="/"
-                className="rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-[#444] shadow-sm transition-all duration-500 hover:-translate-y-1 hover:bg-[#fbfbf9]"
-              >
-                메인화면으로 이동
-              </Link>
-            </div>
-
-            <div className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_0.8fr_auto]">
-              <button
-                onClick={() => setSearchOpen((prev) => !prev)}
-                className="rounded-2xl border border-black/5 bg-white px-4 py-3 text-left text-sm font-semibold text-[#444] transition-all duration-500 hover:-translate-y-1 hover:bg-[#fbfbf9]"
-              >
-                타학교 검색
-              </button>
-
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="rounded-2xl border border-black/5 bg-white px-4 py-3 text-[#171717] outline-none"
-              />
-
-              <button
-                onClick={handleDateApply}
-                className="rounded-2xl bg-[#171717] px-5 py-3 text-sm font-bold text-white transition-all duration-500 hover:-translate-y-1 hover:bg-[#222222]"
-              >
-                날짜 적용
-              </button>
-            </div>
-
-            {searchOpen && (
+        {/* Meal content */}
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2].map((n) => (
               <motion.div
-                initial={{ opacity: 0, y: 24, scale: 0.99 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  duration: 0.65,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-                className="mt-4 rounded-[22px] border border-black/5 bg-white p-4"
+                key={n}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: [0.3, 0.55, 0.3] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut", delay: n * 0.15 }}
+                className="relative overflow-hidden rounded-3xl p-6"
+                style={GLASS_SUBTLE}
               >
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    value={searchName}
-                    onChange={(e) => setSearchName(e.target.value)}
-                    placeholder="학교 이름 입력"
-                    className="flex-1 rounded-2xl border border-black/5 bg-[#fafafa] px-4 py-3 outline-none"
-                  />
-                  <button
-                    onClick={handleSearchSchool}
-                    className="rounded-2xl bg-[#171717] px-5 py-3 text-sm font-bold text-white transition-all duration-500 hover:-translate-y-1 hover:bg-[#222222]"
-                  >
-                    검색
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {searchLoading ? (
-                    <p className="text-sm text-[#666]">학교를 찾는 중입니다...</p>
-                  ) : searchResults.length === 0 ? (
-                    <p className="text-sm text-[#777]">
-                      학교 이름을 입력한 뒤 검색해 주세요.
-                    </p>
-                  ) : (
-                    searchResults.map((school, index) => (
-                      <motion.button
-                        key={`${school.schoolCode}-${index}`}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          delay: index * 0.06,
-                          duration: 0.55,
-                          ease: [0.22, 1, 0.36, 1],
-                        }}
-                        onClick={() => handleSelectSchool(school.schoolName)}
-                        className="block w-full rounded-2xl border border-black/5 bg-[#fafafa] px-4 py-4 text-left transition-all duration-500 hover:-translate-y-1"
-                      >
-                        <p className="font-bold text-[#171717]">
-                          {school.schoolName}
-                        </p>
-                        <p className="mt-1 text-sm text-[#666]">
-                          {school.schoolType}
-                          {school.address ? ` · ${school.address}` : ""}
-                        </p>
-                      </motion.button>
-                    ))
-                  )}
+                <div className="h-4 w-28 rounded-full mb-5" style={{ background: "rgba(255,255,255,0.07)" }} />
+                <div className="space-y-2.5">
+                  {[80, 65, 90, 55].map((w, i) => (
+                    <div key={i} className="h-3 rounded-full" style={{ background: "rgba(255,255,255,0.05)", width: `${w}%` }} />
+                  ))}
                 </div>
               </motion.div>
-            )}
+            ))}
           </div>
-        </motion.section>
-
-        <div className="space-y-6">
-          {loading ? (
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="rounded-[28px] border border-black/5 bg-white/65 p-6 text-center shadow-sm"
-            >
-              <p className="text-[#666]">급식 정보를 불러오는 중입니다...</p>
-            </motion.div>
-          ) : (
-            <>
-              {todayGroup ? (
-                <motion.section
-                  initial={{ opacity: 0, y: 75, scale: 0.965 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{
-                    duration: 1.15,
-                    delay: 0.2,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                  className="rounded-[30px] border border-black/5 bg-white/65 p-4 shadow-[0_10px_34px_rgba(0,0,0,0.04)]"
-                >
-                  <div className="rounded-[24px] border border-black/5 bg-[#f7f6f2] p-5">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-2xl font-extrabold">
-                        {formatDateLabel(todayGroup[0])}
-                      </h2>
-                      <span className="rounded-2xl bg-white px-3 py-2 text-sm font-bold text-[#555] border border-black/5">
-                        오늘 급식
-                      </span>
-                    </div>
-
-                    <div className="space-y-4">
-                      {todayGroup[1].map((meal, mealIndex) => (
-                        <motion.div
-                          key={`${meal.date}-${meal.mealType}-${mealIndex}`}
-                          initial={{ opacity: 0, y: 34, scale: 0.97 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          transition={{
-                            delay: 0.28 + mealIndex * 0.08,
-                            duration: 0.75,
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          className="rounded-[22px] border border-black/5 bg-white p-4"
-                        >
-                          <p className="text-sm font-bold text-[#6a6a6a]">
-                            {meal.mealType}
-                          </p>
-
-                          <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#1f1f1f]">
-                            {meal.dish}
-                          </pre>
-
-                          {meal.calorie && (
-                            <p className="mt-4 text-sm text-[#666]">
-                              칼로리: {meal.calorie}
-                            </p>
-                          )}
-
-                          {meal.origin && (
-                            <details className="mt-3">
-                              <summary className="cursor-pointer text-sm font-semibold text-[#555]">
-                                원산지 보기
-                              </summary>
-                              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#666]">
-                                {meal.origin}
-                              </pre>
-                            </details>
-                          )}
-
-                          {meal.nutrition && (
-                            <details className="mt-3">
-                              <summary className="cursor-pointer text-sm font-semibold text-[#555]">
-                                영양 정보 보기
-                              </summary>
-                              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#666]">
-                                {meal.nutrition}
-                              </pre>
-                            </details>
-                          )}
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                </motion.section>
-              ) : (
+        ) : (
+          <>
+            {todayGroup ? (
+              <motion.div
+                initial={{ opacity: 0, y: 32 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.75, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                className="relative overflow-hidden rounded-3xl p-6"
+                style={GLASS}
+              >
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
                 <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  className="rounded-[28px] border border-black/5 bg-white/65 p-6 text-center shadow-sm"
-                >
-                  <p className="text-lg font-bold">오늘 급식 정보가 없습니다</p>
-                  <p className="mt-2 text-sm text-[#777]">
-                    선택한 날짜 기준 첫 화면에 표시할 급식이 없습니다.
-                  </p>
-                </motion.div>
-              )}
-
-              {futureGroups.length > 0 && (
-                <div className="pt-2">
-                  <p className="mb-4 text-sm font-semibold text-[#7a7a7a]">
-                    아래로 스크롤 ↓
-                  </p>
+                  className="absolute -inset-px rounded-3xl pointer-events-none"
+                  animate={{ opacity: [0, 0.35, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  style={{ background: "radial-gradient(ellipse at 60% 0%, rgba(59,130,246,0.18), transparent 55%)" }}
+                />
+                <div className="flex items-center justify-between mb-5 relative z-10">
+                  <h2 className="text-[22px] font-black tracking-[-0.04em] text-white">
+                    {formatDateLabel(todayGroup[0])}
+                  </h2>
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 18 }}
+                    className="rounded-full px-3 py-1.5 text-[10px] font-bold text-emerald-400/85"
+                    style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)" }}
+                  >
+                    ✦ 오늘 급식
+                  </motion.span>
                 </div>
-              )}
+                <div className="space-y-3 relative z-10">
+                  {todayGroup[1].map((meal, i) => (
+                    <motion.div
+                      key={`${meal.date}-${meal.mealType}-${i}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ y: -3, scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={{ delay: 0.15 + i * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                      className="rounded-2xl p-4 cursor-default"
+                      style={{ ...GLASS_SUBTLE, transition: "box-shadow 0.3s" }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/30">{meal.mealType}</p>
+                        {meal.calorie && (
+                          <motion.span
+                            initial={{ opacity: 0, scale: 0.85 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.25 + i * 0.07, type: "spring", stiffness: 260, damping: 18 }}
+                            className="rounded-full px-2.5 py-1 text-[10px] font-bold"
+                            style={{ background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.22)", color: "rgba(251,191,36,0.85)" }}
+                          >
+                            🔥 {meal.calorie}
+                          </motion.span>
+                        )}
+                      </div>
+                      <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-7 text-white/70">{meal.dish}</pre>
+                      {meal.origin && (
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-[11px] font-semibold text-white/30 hover:text-white/55 transition-colors">원산지 보기</summary>
+                          <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-[11px] leading-6 text-white/28">{meal.origin}</pre>
+                        </details>
+                      )}
+                      {meal.nutrition && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[11px] font-semibold text-white/30 hover:text-white/55 transition-colors">영양 정보 보기</summary>
+                          <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-[11px] leading-6 text-white/28">{meal.nutrition}</pre>
+                        </details>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            ) : (
+              <div className="rounded-3xl p-8 text-center" style={GLASS_SUBTLE}>
+                <p className="font-bold text-white/55">오늘 급식 정보가 없습니다</p>
+                <p className="text-[12px] text-white/25 mt-1">선택한 날짜 기준 첫 화면에 표시할 급식이 없습니다.</p>
+              </div>
+            )}
 
-              {futureGroups.map(([date, meals], index) => (
-                <motion.section
-                  key={date}
-                  initial={{ opacity: 0, y: 95, scale: 0.96 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: true, amount: 0.18 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 60,
-                    damping: 15,
-                    mass: 1.05,
-                    delay: index * 0.04,
-                  }}
-                  className="rounded-[30px] border border-black/5 bg-white/65 p-4 shadow-[0_10px_34px_rgba(0,0,0,0.04)]"
-                >
-                  <div className="rounded-[24px] border border-black/5 bg-[#f7f6f2] p-5">
-                    <h2 className="text-2xl font-extrabold">
-                      {formatDateLabel(date)}
-                    </h2>
+            {futureGroups.map(([date, meals], index) => (
+              <motion.div
+                key={date}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -2 }}
+                viewport={{ once: true, amount: 0.08 }}
+                transition={{ duration: 0.65, delay: index * 0.04, ease: [0.22, 1, 0.36, 1] }}
+                className="relative overflow-hidden rounded-3xl p-6 group"
+                style={GLASS_SUBTLE}
+              >
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  style={{ background: "radial-gradient(ellipse at 20% 20%, rgba(139,92,246,0.05), transparent 65%)" }}
+                />
+                <h2 className="text-[18px] font-black tracking-[-0.03em] text-white mb-4 relative z-10">{formatDateLabel(date)}</h2>
+                <div className="space-y-3 relative z-10">
+                  {meals.map((meal, i) => (
+                    <motion.div
+                      key={`${meal.date}-${meal.mealType}-${i}`}
+                      initial={{ opacity: 0, y: 18 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      whileHover={{ x: 4 }}
+                      viewport={{ once: true, amount: 0.15 }}
+                      transition={{ delay: i * 0.05, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      className="rounded-2xl p-4"
+                      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/25">{meal.mealType}</p>
+                        {meal.calorie && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[9px] font-bold"
+                            style={{ background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.15)", color: "rgba(251,191,36,0.6)" }}
+                          >
+                            🔥 {meal.calorie}
+                          </span>
+                        )}
+                      </div>
+                      <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-7 text-white/60">{meal.dish}</pre>
+                      {meal.origin && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[11px] font-semibold text-white/25 hover:text-white/50 transition-colors">원산지 보기</summary>
+                          <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-[11px] leading-6 text-white/22">{meal.origin}</pre>
+                        </details>
+                      )}
+                      {meal.nutrition && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[11px] font-semibold text-white/25 hover:text-white/50 transition-colors">영양 정보 보기</summary>
+                          <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-[11px] leading-6 text-white/22">{meal.nutrition}</pre>
+                        </details>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
 
-                    <div className="mt-4 space-y-4">
-                      {meals.map((meal, mealIndex) => (
-                        <motion.div
-                          key={`${meal.date}-${meal.mealType}-${mealIndex}`}
-                          initial={{ opacity: 0, y: 42, scale: 0.975 }}
-                          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                          viewport={{ once: true, amount: 0.22 }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 66,
-                            damping: 15,
-                            mass: 1.02,
-                            delay: mealIndex * 0.06,
-                          }}
-                          className="rounded-[22px] border border-black/5 bg-white p-4"
-                        >
-                          <p className="text-sm font-bold text-[#6a6a6a]">
-                            {meal.mealType}
-                          </p>
+            {!todayGroup && futureGroups.length === 0 && (
+              <div className="rounded-3xl p-8 text-center" style={GLASS_SUBTLE}>
+                <p className="font-bold text-white/55">급식 정보가 없습니다</p>
+                <p className="text-[12px] text-white/25 mt-1">해당 기간에 등록된 급식이 없을 수 있습니다.</p>
+              </div>
+            )}
+          </>
+        )}
 
-                          <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#1f1f1f]">
-                            {meal.dish}
-                          </pre>
-
-                          {meal.calorie && (
-                            <p className="mt-4 text-sm text-[#666]">
-                              칼로리: {meal.calorie}
-                            </p>
-                          )}
-
-                          {meal.origin && (
-                            <details className="mt-3">
-                              <summary className="cursor-pointer text-sm font-semibold text-[#555]">
-                                원산지 보기
-                              </summary>
-                              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#666]">
-                                {meal.origin}
-                              </pre>
-                            </details>
-                          )}
-
-                          {meal.nutrition && (
-                            <details className="mt-3">
-                              <summary className="cursor-pointer text-sm font-semibold text-[#555]">
-                                영양 정보 보기
-                              </summary>
-                              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#666]">
-                                {meal.nutrition}
-                              </pre>
-                            </details>
-                          )}
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                </motion.section>
-              ))}
-
-              {!todayGroup && futureGroups.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  className="rounded-[28px] border border-black/5 bg-white/65 p-6 text-center shadow-sm"
-                >
-                  <p className="text-lg font-bold">급식 정보가 없습니다</p>
-                  <p className="mt-2 text-sm text-[#777]">
-                    해당 기간에 등록된 급식이 없을 수 있습니다.
-                  </p>
-                </motion.div>
-              )}
-            </>
-          )}
-
-          <div ref={observerRef} className="h-12" />
-
-          {loadingMore && hasMore && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="pb-10 text-center text-sm text-[#777]"
-            >
-              다음 급식 정보를 불러오는 중입니다...
-            </motion.div>
-          )}
-
-          {!loading && !loadingMore && !hasMore && items.length > 0 && (
-            <div className="pb-12 text-center text-sm text-[#888]">
-              마지막 페이지입니다.
-            </div>
-          )}
-        </div>
+        <div ref={observerRef} className="h-12" />
+        {loadingMore && hasMore && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-10 text-center text-[12px] text-white/28">
+            다음 급식 정보를 불러오는 중입니다...
+          </motion.div>
+        )}
+        {!loading && !loadingMore && !hasMore && items.length > 0 && (
+          <div className="pb-12 text-center text-[12px] text-white/22">마지막 페이지입니다.</div>
+        )}
       </div>
-    </motion.main>
+    </main>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import MagneticButton from "../components/ui/magnetic-button";
+import MagneticAction from "../components/ui/magnetic-action";
 import { useEffect, useState } from "react";
-
+import { motion } from "framer-motion";
 
 type MeUser = {
   id: number;
@@ -17,57 +19,96 @@ type RankingItem = {
   totalCount: number;
   elapsedSeconds: number;
   createdAt: string;
-  user: {
-    nickname: string;
-  };
+  user: { nickname: string };
 };
 
-export default function HomePage() {
+const MEDAL = ["🥇", "🥈", "🥉"];
+
+const GLASS = {
+  background: "rgba(255,255,255,0.038)",
+  backdropFilter: "blur(48px) saturate(170%)",
+  WebkitBackdropFilter: "blur(48px) saturate(170%)",
+  border: "1px solid rgba(255,255,255,0.085)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.08), 0 24px 64px rgba(0,0,0,0.35)",
+} as React.CSSProperties;
+
+const QUIZ_ITEMS = [
+  {
+    href: "/quiz",
+    icon: "漢",
+    iconStyle: { background: "linear-gradient(135deg, #10b981, #0d9488)" },
+    title: "한자 퀴즈",
+    desc: "음독, 뜻+음 조합",
+    accentColor: "rgba(16,185,129,0.15)",
+    tag: "STUDY",
+  },
+  {
+    href: "/stock-quiz",
+    icon: "📈",
+    iconStyle: { background: "linear-gradient(135deg, #3b82f6, #1d4ed8)" },
+    title: "주식 퀴즈",
+    desc: "용어 · 뉴스 문제",
+    accentColor: "rgba(59,130,246,0.15)",
+    tag: "FINANCE",
+  },
+];
+
+const SUB_ITEMS = [
+  { href: "/phrase-quiz", icon: "📜", title: "논어 / 사자성어", desc: "배열 퀴즈" },
+  { href: "/ranking", icon: "🏆", title: "랭킹 보기", desc: "전체 순위 확인" },
+  { href: "/wrong-note", icon: "📝", title: "오답노트", desc: "틀린 문제 복습" },
+];
+
+function CardHover({ href, children, delay = 0 }: { href: string; children: React.ReactNode; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 28 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -4 }}
+    >
+      <Link href={href} className="block h-full">
+        {children}
+      </Link>
+    </motion.div>
+  );
+}
+
+export default function HubPage() {
   const [currentUser, setCurrentUser] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [topRankings, setTopRankings] = useState<RankingItem[]>([]);
 
   useEffect(() => {
-    const loadHomeData = async () => {
+    const load = async () => {
       try {
         const [meRes, rankingRes] = await Promise.all([
           fetch("/api/me", { cache: "no-store" }),
-          fetch("/api/ranking?limit=100", { cache: "no-store" }), // 💡 필터링을 위해 limit을 넉넉히 가져옵니다
+          fetch("/api/ranking?limit=100", { cache: "no-store" }),
         ]);
-
         const meData = await meRes.json();
         const rankingData = await rankingRes.json();
-
-        if (meRes.ok && meData.ok) {
-          setCurrentUser(meData.user);
-        } else {
-          setCurrentUser(null);
-        }
-
+        if (meRes.ok && meData.ok) setCurrentUser(meData.user);
         if (rankingRes.ok && rankingData.ok) {
-          // 💡 중복 제거 로직 추가
-          const rawRankings: RankingItem[] = rankingData.rankings;
-          const seenUsers = new Set<string | number>();
-          
-          const uniqueRankings = rawRankings.filter((item: any) => {
-            // userId가 API에서 넘어오는지 확인 (없으면 user.id 등 고유값 활용)
-            const identifier = item.userId || item.user?.nickname; 
-            if (seenUsers.has(identifier)) return false;
-            seenUsers.add(identifier);
-            return true;
-          }).slice(0, 10); // 중복 제거 후 최종 상위 10개만 선택
-
-          setTopRankings(uniqueRankings);
-        } else {
-          setTopRankings([]);
+          const seen = new Set<string | number>();
+          setTopRankings(
+            (rankingData.rankings as RankingItem[])
+              .filter((item: any) => {
+                const id = item.userId || item.user?.nickname;
+                if (seen.has(id)) return false;
+                seen.add(id);
+                return true;
+              })
+              .slice(0, 10)
+          );
         }
       } finally {
         setLoading(false);
       }
     };
-
-    loadHomeData();
+    load();
   }, []);
+
   const handleLogout = async () => {
     await fetch("/api/logout", { method: "POST" });
     setCurrentUser(null);
@@ -75,196 +116,343 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-lime-100 via-green-50 to-white flex items-center justify-center p-6">
-      <section className="w-full max-w-6xl grid md:grid-cols-2 gap-8 items-start">
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 shadow-sm border border-green-100">
-              <span className="text-2xl">🌱</span>
-              <span className="text-sm font-semibold text-green-700">
-                반복학습으로 쉽게 배우는
-              </span>
+    <main className="min-h-screen overflow-x-hidden text-white">
+      {/* Navbar */}
+      <motion.header
+        initial={{ opacity: 0, y: -18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed left-0 right-0 top-0 z-50 px-4 py-4 md:px-6"
+      >
+        <div
+          className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl px-4 py-3"
+          style={GLASS}
+        >
+          <MagneticButton
+            href="/"
+            className="flex items-center gap-1.5 text-[12px] font-semibold text-white/50 hover:text-white/80 transition-colors"
+          >
+            ← 메인화면
+          </MagneticButton>
+
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[13px] font-black tracking-[0.06em] text-white">no NAME</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-white/25">hub</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!loading && (currentUser ? (
+              <>
+                <div
+                  className="hidden sm:flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px]"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+                >
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold">
+                    {currentUser.nickname.charAt(0)}
+                  </div>
+                  <span className="font-semibold text-white/70">{currentUser.nickname}</span>
+                </div>
+                <MagneticAction
+                  onClick={handleLogout}
+                  className="rounded-full px-4 py-1.5 text-[11px] font-semibold text-red-400/80 hover:text-red-300 transition-colors"
+                  style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.12)" }}
+                >
+                  로그아웃
+                </MagneticAction>
+              </>
+            ) : (
+              <MagneticButton
+                href="/login"
+                className="block rounded-full px-4 py-1.5 text-[11px] font-semibold text-white/55 hover:text-white/80 transition-colors"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+              >
+                로그인
+              </MagneticButton>
+            ))}
+          </div>
+        </div>
+      </motion.header>
+
+      <div className="relative mx-auto max-w-7xl px-4 pt-28 pb-16 md:px-6">
+        {/* Hero heading */}
+        <motion.div
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-10 text-center"
+        >
+          <div
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-white/30 mb-5"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            Project · no NAME
+          </div>
+          <h1 className="text-[clamp(42px,8vw,96px)] font-black tracking-[-0.055em] leading-none"
+            style={{
+              background: "linear-gradient(175deg, #ffffff 15%, rgba(255,255,255,0.6) 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            한자 퀴즈
+          </h1>
+          <p className="mt-4 text-[13px] text-white/28">원하는 학습 방식을 선택하세요</p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-[1fr_340px] gap-5 items-start">
+          {/* Left column: quiz menu */}
+          <div className="space-y-4">
+            {/* Main 2-col quiz cards */}
+            <div className="grid grid-cols-2 gap-4">
+              {QUIZ_ITEMS.map((item, i) => (
+                <CardHover key={item.href} href={item.href} delay={0.15 + i * 0.08}>
+                  <div
+                    className="relative overflow-hidden rounded-3xl p-6 h-full min-h-[170px] flex flex-col justify-between group"
+                    style={GLASS}
+                  >
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                      style={{ background: `radial-gradient(ellipse at 30% 30%, ${item.accentColor}, transparent 70%)` }}
+                    />
+                    <div className="relative z-10">
+                      <div
+                        className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-xl font-black mb-4 shadow-lg"
+                        style={item.iconStyle}
+                      >
+                        {item.icon}
+                      </div>
+                      <span
+                        className="text-[8px] font-bold uppercase tracking-[0.22em] px-2 py-0.5 rounded-full"
+                        style={{ color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                      >
+                        {item.tag}
+                      </span>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="font-black text-white text-[18px] leading-tight tracking-[-0.02em]">{item.title}</p>
+                      <p className="text-[12px] text-white/35 mt-1">{item.desc}</p>
+                      <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white/22 group-hover:text-white/55 group-hover:translate-x-1 transition-all duration-300">
+                        시작 →
+                      </p>
+                    </div>
+                  </div>
+                </CardHover>
+              ))}
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-extrabold leading-tight text-gray-900">
-              대아고등학교
-              <br />
-              <span className="text-green-600">한자 퀴즈</span>
-            </h1>
+            {/* 모의주식 full-width */}
+            <motion.div
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.65, delay: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -3 }}
+            >
+              <Link href="/stock-sim" className="block group">
+                <div
+                  className="relative overflow-hidden rounded-3xl px-6 py-5 flex items-center gap-5"
+                  style={GLASS}
+                >
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(139,92,246,0.12), transparent 65%)" }}
+                  />
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-2xl shadow-lg shadow-violet-500/20 shrink-0 relative z-10">
+                    📊
+                  </div>
+                  <div className="flex-1 relative z-10">
+                    <p className="font-black text-white text-[17px] tracking-[-0.02em]">모의주식</p>
+                    <p className="text-[12px] text-white/35 mt-0.5">실시간 주가 · 한국·미국 주식 · 시작자금 200만원</p>
+                  </div>
+                  <span className="text-[11px] font-bold text-white/25 group-hover:text-white/60 group-hover:translate-x-1 transition-all duration-300 relative z-10 shrink-0">
+                    시작 →
+                  </span>
+                </div>
+              </Link>
+            </motion.div>
 
-            <p className="text-lg md:text-xl text-gray-600 leading-relaxed">
-              퀴즈, 랭킹, 사용자 통계, 관리자 기능까지 한 곳에서 이용하실 수 있습니다.
-            </p>
+            {/* Sub menu 3-col + profile */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {SUB_ITEMS.map((item, i) => (
+                <motion.div
+                  key={item.href}
+                  initial={{ opacity: 0, y: 24 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.55, delay: 0.38 + i * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                  whileHover={{ y: -3 }}
+                >
+                  <Link href={item.href} className="block group">
+                    <div
+                      className="relative overflow-hidden rounded-2xl p-4"
+                      style={{
+                        background: "rgba(255,255,255,0.03)",
+                        backdropFilter: "blur(32px)",
+                        WebkitBackdropFilter: "blur(32px)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                      }}
+                    >
+                      <p className="text-2xl mb-2.5">{item.icon}</p>
+                      <p className="font-bold text-white text-[13px] leading-tight">{item.title}</p>
+                      <p className="text-[11px] text-white/30 mt-0.5">{item.desc}</p>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-4">
-              {loading ? (
-                <p className="text-sm text-gray-500">
-                  로그인 상태를 확인하는 중입니다...
-                </p>
-              ) : currentUser ? (
-                <div className="space-y-2">
-                  <p className="font-bold text-gray-900">
-                    로그인 중: {currentUser.nickname}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {currentUser.email} / 권한: {currentUser.role}
-                  </p>
-                  <button
-                    onClick={handleLogout}
-                    className="rounded-xl bg-red-100 px-4 py-2 text-sm font-bold text-red-600 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+              {/* Profile or Login */}
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.59, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -3 }}
+              >
+                {currentUser ? (
+                  <div
+                    className="relative overflow-hidden rounded-2xl p-4"
+                    style={{
+                      background: "rgba(139,92,246,0.07)",
+                      backdropFilter: "blur(32px)",
+                      WebkitBackdropFilter: "blur(32px)",
+                      border: "1px solid rgba(139,92,246,0.18)",
+                    }}
                   >
-                    로그아웃
-                  </button>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold mb-2.5">
+                      {currentUser.nickname.charAt(0)}
+                    </div>
+                    <p className="font-bold text-white text-[13px] leading-tight truncate">{currentUser.nickname}</p>
+                    <p className="text-[11px] text-white/30 mt-0.5">{currentUser.role}</p>
+                  </div>
+                ) : (
+                  <Link href="/login" className="block group">
+                    <div
+                      className="relative overflow-hidden rounded-2xl p-4"
+                      style={{
+                        background: "rgba(255,255,255,0.03)",
+                        backdropFilter: "blur(32px)",
+                        WebkitBackdropFilter: "blur(32px)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                      }}
+                    >
+                      <p className="text-2xl mb-2.5">🔑</p>
+                      <p className="font-bold text-white text-[13px] leading-tight">로그인</p>
+                      <p className="text-[11px] text-white/30 mt-0.5">랭킹 기록 저장</p>
+                    </div>
+                  </Link>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Admin menu */}
+            {currentUser?.role === "admin" && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.65 }}
+                className="grid grid-cols-2 gap-3"
+              >
+                {[
+                  { href: "/admin", icon: "⚙️", label: "관리자" },
+                  { href: "/admin/phrases", icon: "📚", label: "문구 관리" },
+                ].map((item) => (
+                  <Link key={item.href} href={item.href} className="block">
+                    <div
+                      className="rounded-2xl p-4"
+                      style={{
+                        background: "rgba(251,146,60,0.07)",
+                        border: "1px solid rgba(251,146,60,0.16)",
+                        backdropFilter: "blur(24px)",
+                      }}
+                    >
+                      <p className="text-xl mb-2">{item.icon}</p>
+                      <p className="font-bold text-orange-300/80 text-[13px]">{item.label}</p>
+                    </div>
+                  </Link>
+                ))}
+              </motion.div>
+            )}
+          </div>
+
+          {/* Right column: Ranking TOP 10 */}
+          <motion.div
+            initial={{ opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.75, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="relative overflow-hidden rounded-3xl p-5" style={GLASS}>
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/25">실시간</p>
+                  <h2 className="text-[20px] font-black tracking-[-0.04em] text-white mt-0.5">랭킹 TOP 10</h2>
+                </div>
+                <div
+                  className="rounded-full px-3 py-1.5 text-[10px] font-bold"
+                  style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", color: "rgba(251,191,36,0.85)" }}
+                >
+                  🏆 TOP
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="space-y-2.5">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-14 rounded-2xl animate-pulse" style={{ background: "rgba(255,255,255,0.04)" }} />
+                  ))}
+                </div>
+              ) : topRankings.length === 0 ? (
+                <div
+                  className="rounded-2xl p-6 text-center"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <p className="text-2xl mb-2">🌱</p>
+                  <p className="font-semibold text-white/60 text-[13px]">아직 랭킹이 없습니다</p>
+                  <p className="text-[11px] text-white/28 mt-1">첫 번째 도전자가 되어보세요!</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="font-bold text-gray-900">
-                    현재 로그인되어 있지 않습니다
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    로그인 후 랭킹 모드와 기록 저장 기능을 이용하실 수 있습니다.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <Link
-                href="/quiz"
-                className="rounded-2xl bg-green-500 px-6 py-4 text-center text-lg font-bold text-white shadow-lg shadow-green-200 transition-colors duration-300"
-              >
-                퀴즈 시작
-              </Link>
-
-              <Link
-                href="/phrase-quiz"
-                className="rounded-2xl bg-white px-6 py-4 text-center text-lg font-bold text-gray-800 border border-gray-200 shadow-sm"
-              >
-                논어 / 사자성어 퀴즈
-              </Link>
-
-              <Link
-                href="/ranking"
-                className="rounded-2xl bg-white px-6 py-4 text-center text-lg font-bold text-gray-800 border border-gray-200 shadow-sm transition-colors duration-300"
-              >
-                랭킹 보기
-              </Link>
-
-              <Link
-                href="/wrong-note"
-                className="rounded-2xl bg-white px-6 py-4 text-center text-lg font-bold text-gray-800 border border-gray-200 shadow-sm"
-              >
-                오답노트
-              </Link>
-
-              {currentUser?.role === "admin" && (
-                <Link
-                  href="/admin/phrases"
-                  className="rounded-2xl bg-white px-6 py-4 text-center text-lg font-bold text-gray-800 border border-gray-200 shadow-sm"
-                >
-                  논어 / 사자성어 관리
-                </Link>
-              )}
-
-              {!currentUser && (
-                <Link
-                  href="/login"
-                  className="rounded-2xl bg-white px-6 py-4 text-center text-lg font-bold text-gray-800 border border-gray-200 shadow-sm transition-colors duration-300"
-                >
-                  로그인 / 회원가입
-                </Link>
-              )}
-
-              {currentUser?.role === "admin" && (
-                <Link
-                  href="/admin"
-                  className="rounded-2xl bg-white px-6 py-4 text-center text-lg font-bold text-gray-800 border border-gray-200 shadow-sm transition-colors duration-300"
-                >
-                  관리자
-                </Link>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-3 pt-2">
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm border border-gray-100">
-                <p className="text-sm text-gray-500">퀴즈 모드</p>
-                <p className="font-bold text-gray-800">쉬움 / 보통 / 어려움</p>
-              </div>
-
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm border border-gray-100">
-                <p className="text-sm text-gray-500">랭킹 기능</p>
-                <p className="font-bold text-gray-800">로그인 후 기록 저장</p>
-              </div>
-
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm border border-gray-100">
-                <p className="text-sm text-gray-500">관리 기능</p>
-                <p className="font-bold text-gray-800">한자 / 사용자 관리</p>
-              </div>
-            </div>
-          </div>
-
-
-          <div className="relative">
-            <div className="absolute -top-4 -left-4 w-24 h-24 bg-yellow-200 rounded-full blur-2xl opacity-60" />
-            <div className="absolute -bottom-6 -right-4 w-32 h-32 bg-green-200 rounded-full blur-3xl opacity-60" />
-
-            <div className="relative rounded-[2rem] bg-white p-6 md:p-8 shadow-2xl border border-green-100">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <p className="text-sm text-gray-500">실시간 홈 미리보기</p>
-                  <h2 className="text-2xl font-bold text-gray-900">랭킹 TOP 10</h2>
-                </div>
-                <div className="rounded-2xl bg-yellow-100 px-3 py-2 text-yellow-700 font-bold">
-                  TOP
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {topRankings.length === 0 ? (
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-center">
-                    <p className="font-semibold text-gray-800">
-                      아직 등록된 랭킹이 없습니다
-                    </p>
-                    <p className="mt-1 text-sm text-gray-500">
-                      로그인 후 랭킹 모드를 완료하면 기록이 표시됩니다.
-                    </p>
-                  </div>
-                ) : (
-                  topRankings.map((item, index) => (
-                    <div
+                  {topRankings.map((item, index) => (
+                    <motion.div
                       key={item.id}
-                      className="rounded-2xl border border-gray-100 bg-gray-50 p-4"
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 + index * 0.04, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      className="rounded-2xl px-4 py-3 flex items-center gap-3"
+                      style={index < 3 ? {
+                        background: index === 0 ? "rgba(251,191,36,0.08)" : index === 1 ? "rgba(148,163,184,0.08)" : "rgba(251,146,60,0.08)",
+                        border: index === 0 ? "1px solid rgba(251,191,36,0.2)" : index === 1 ? "1px solid rgba(148,163,184,0.18)" : "1px solid rgba(251,146,60,0.18)",
+                      } : { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm text-gray-500">{index + 1}위</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {item.user.nickname}
-                          </p>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="font-bold text-gray-900">
-                            {item.score}/{item.totalCount}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {item.elapsedSeconds}초
-                          </p>
-                        </div>
+                      <span className="text-base w-7 text-center shrink-0 font-bold">
+                        {index < 3 ? MEDAL[index] : <span className="text-white/30 text-[13px]">{index + 1}</span>}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-white text-[13px] truncate">{item.user.nickname}</p>
+                        <p className="text-[11px] text-white/30">{item.elapsedSeconds}초</p>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-white text-[13px]">
+                          {item.score}<span className="text-white/25 font-normal">/{item.totalCount}</span>
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
 
-              <Link
+              <MagneticButton
                 href="/ranking"
-                className="mt-5 flex items-center justify-center rounded-2xl bg-green-500 px-4 py-4 text-base font-bold text-white shadow-lg shadow-green-200 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                className="mt-4 flex items-center justify-center rounded-2xl py-3 text-[12px] font-bold text-white/70 hover:text-white transition-colors"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}
               >
-                자세히 보기
-              </Link>
+                전체 랭킹 보기 →
+              </MagneticButton>
             </div>
-          </div>
-      </section>
+          </motion.div>
+        </div>
+      </div>
     </main>
   );
 }

@@ -32,6 +32,9 @@ export default function AdminPhrasesPage() {
   const [hanjaTokens, setHanjaTokens] = useState("");
   const [koreanTokens, setKoreanTokens] = useState("");
 
+  const [bulkText, setBulkText] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   const loadItems = async () => {
     const res = await fetch("/api/phrases", { cache: "no-store" });
     const data = await res.json();
@@ -89,6 +92,64 @@ export default function AdminPhrasesPage() {
     setKoreanTokens("");
     await loadItems();
     alert("문구가 추가되었습니다.");
+  };
+
+  const handleBulkAdd = async () => {
+    const lines = bulkText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      alert("추가할 문구 목록을 입력해 주세요.");
+      return;
+    }
+
+    setBulkLoading(true);
+    let success = 0;
+    const errors: string[] = [];
+
+    for (const line of lines) {
+      const parts = line.split(";;");
+      if (parts.length < 6) {
+        errors.push(`형식 오류 (필드 부족): ${line.slice(0, 40)}`);
+        continue;
+      }
+
+      const [cat, ttl, hjText, krText, hjTokens, krTokens] = parts.map((p) => p.trim());
+
+      if (!["analects", "idiom"].includes(cat)) {
+        errors.push(`카테고리 오류 (analects 또는 idiom): ${line.slice(0, 40)}`);
+        continue;
+      }
+
+      const res = await fetch("/api/phrases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: cat,
+          title: ttl,
+          hanjaText: hjText,
+          koreanText: krText,
+          hanjaTokens: hjTokens,
+          koreanTokens: krTokens,
+        }),
+      });
+
+      if (res.ok) {
+        success++;
+      } else {
+        errors.push(`추가 실패: ${line.slice(0, 40)}`);
+      }
+    }
+
+    setBulkText("");
+    await loadItems();
+    setBulkLoading(false);
+
+    const msg = [`${success}개 문구가 추가되었습니다.`];
+    if (errors.length > 0) msg.push(`\n오류 ${errors.length}건:\n${errors.join("\n")}`);
+    alert(msg.join(""));
   };
 
   const handleDelete = async (id: number) => {
@@ -198,6 +259,31 @@ export default function AdminPhrasesPage() {
             className="mt-4 w-full rounded-2xl bg-green-500 px-4 py-4 text-base font-bold text-white"
           >
             문구 추가
+          </button>
+        </div>
+
+        <div className="mt-5 rounded-[28px] border border-blue-100 bg-white p-5 shadow-xl">
+          <h2 className="mb-1 text-xl font-extrabold text-gray-900">여러 문구 한번에 추가</h2>
+          <p className="mb-1 text-sm text-gray-500">
+            한 줄에 하나씩, 필드를 <code className="rounded bg-gray-100 px-1 font-mono text-xs">;;</code>로 구분해서 입력하세요.
+          </p>
+          <p className="mb-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 font-mono text-xs text-gray-500 leading-6">
+            형식: 카테고리;;제목;;한문전체;;한국어전체;;한자토큰(|구분);;한국어토큰(|구분)<br />
+            analects;;학이시습지;;學而時習之;;배우고 때때로 익히면;;學而|時習之|不亦|說乎;;배우고|때때로|익히면|기쁘지 않은가<br />
+            idiom;;새옹지마;;塞翁之馬;;변방 노인의 말;;塞翁|之|馬;;변방|노인의|말
+          </p>
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={`analects;;학이시습지;;學而時習之;;배우고 때때로 익히면;;學而|時習之|不亦|說乎;;배우고|때때로|익히면|기쁘지 않은가\nidiom;;새옹지마;;塞翁之馬;;변방 노인의 말;;塞翁|之|馬;;변방|노인의|말`}
+            className="h-40 w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          <button
+            onClick={handleBulkAdd}
+            disabled={bulkLoading}
+            className="mt-3 w-full rounded-2xl bg-blue-500 px-4 py-4 text-base font-bold text-white shadow-lg disabled:opacity-50"
+          >
+            {bulkLoading ? "추가 중..." : "여러 문구 추가"}
           </button>
         </div>
 

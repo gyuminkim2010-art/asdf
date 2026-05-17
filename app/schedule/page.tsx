@@ -31,36 +31,33 @@ function getCalendarMatrix(year: number, month: number) {
   const firstDay = new Date(year, month - 1, 1);
   const lastDate = new Date(year, month, 0).getDate();
   const startWeekday = firstDay.getDay();
-
   const cells: Array<{ day: number | null }> = [];
-
-  for (let i = 0; i < startWeekday; i++) {
-    cells.push({ day: null });
-  }
-
-  for (let day = 1; day <= lastDate; day++) {
-    cells.push({ day });
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push({ day: null });
-  }
-
+  for (let i = 0; i < startWeekday; i++) cells.push({ day: null });
+  for (let day = 1; day <= lastDate; day++) cells.push({ day });
+  while (cells.length % 7 !== 0) cells.push({ day: null });
   const weeks = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7));
-  }
-
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   return weeks;
 }
 
+const GLASS = {
+  background: "rgba(255,255,255,0.038)",
+  backdropFilter: "blur(48px) saturate(170%)",
+  WebkitBackdropFilter: "blur(48px) saturate(170%)",
+  border: "1px solid rgba(255,255,255,0.085)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 24px 64px rgba(0,0,0,0.35)",
+} as React.CSSProperties;
+
+const GLASS_SUBTLE = {
+  background: "rgba(255,255,255,0.025)",
+  backdropFilter: "blur(24px)",
+  WebkitBackdropFilter: "blur(24px)",
+  border: "1px solid rgba(255,255,255,0.06)",
+} as React.CSSProperties;
+
 export default function SchedulePage() {
   const now = new Date();
-  const todayKey = formatDateKey(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    now.getDate()
-  );
+  const todayKey = formatDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
   const [schoolName, setSchoolName] = useState("대아고등학교");
   const [searchName, setSearchName] = useState("");
@@ -70,426 +67,361 @@ export default function SchedulePage() {
 
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [calendarDirection, setCalendarDirection] = useState<1 | -1>(1);
 
-  const loadSchedule = async (
-    school: string,
-    targetYear = year,
-    targetMonth = month
-  ) => {
+  const loadSchedule = async (school: string, targetYear = year, targetMonth = month) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("schoolName", school);
       params.set("year", String(targetYear));
       params.set("month", String(targetMonth));
-
-      const res = await fetch(`/api/schedule?${params.toString()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/schedule?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
-
-      if (res.ok && data.ok) {
-        setItems(data.schedules);
-        setSchoolName(data.school || school);
-      } else {
-        setItems([]);
-      }
+      if (res.ok && data.ok) { setItems(data.schedules); setSchoolName(data.school || school); }
+      else setItems([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadSchedule("대아고등학교", year, month);
-  }, []);
+  useEffect(() => { loadSchedule("대아고등학교", year, month); }, []);
 
   const scheduleMap = useMemo(() => {
     const map = new Map<string, ScheduleItem[]>();
-
     for (const item of items) {
-      if (!map.has(item.date)) {
-        map.set(item.date, []);
-      }
+      if (!map.has(item.date)) map.set(item.date, []);
       map.get(item.date)!.push(item);
     }
-
     return map;
   }, [items]);
 
-  const selectedItems = useMemo(() => {
-    if (!selectedDate) return [];
-    return scheduleMap.get(selectedDate) || [];
-  }, [selectedDate, scheduleMap]);
-
+  const selectedItems = useMemo(() => (!selectedDate ? [] : scheduleMap.get(selectedDate) || []), [selectedDate, scheduleMap]);
   const weeks = useMemo(() => getCalendarMatrix(year, month), [year, month]);
 
   const handlePrevMonth = async () => {
     const nextMonth = month === 1 ? 12 : month - 1;
     const nextYear = month === 1 ? year - 1 : year;
-
-    setCalendarDirection(-1);
-    setYear(nextYear);
-    setMonth(nextMonth);
+    setCalendarDirection(-1); setYear(nextYear); setMonth(nextMonth);
     await loadSchedule(schoolName, nextYear, nextMonth);
   };
 
   const handleNextMonth = async () => {
     const nextMonth = month === 12 ? 1 : month + 1;
     const nextYear = month === 12 ? year + 1 : year;
-
-    setCalendarDirection(1);
-    setYear(nextYear);
-    setMonth(nextMonth);
+    setCalendarDirection(1); setYear(nextYear); setMonth(nextMonth);
     await loadSchedule(schoolName, nextYear, nextMonth);
   };
 
   const handleSearchSchool = async () => {
     if (!searchName.trim()) return;
-
     setSearchLoading(true);
     try {
-      const res = await fetch(
-        `/api/school-search?schoolName=${encodeURIComponent(searchName)}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(`/api/school-search?schoolName=${encodeURIComponent(searchName)}`, { cache: "no-store" });
       const data = await res.json();
-
-      if (res.ok && data.ok) {
-        setSearchResults(data.schools);
-      } else {
-        setSearchResults([]);
-      }
-    } finally {
-      setSearchLoading(false);
-    }
+      setSearchResults(res.ok && data.ok ? data.schools : []);
+    } finally { setSearchLoading(false); }
   };
 
   const handleSelectSchool = async (name: string) => {
-    setSearchOpen(false);
-    setSearchResults([]);
-    setSearchName("");
-    setSchoolName(name);
+    setSearchOpen(false); setSearchResults([]); setSearchName(""); setSchoolName(name);
     await loadSchedule(name, year, month);
   };
 
   return (
-    <motion.main
-      initial={{ opacity: 0, y: 90, scale: 0.975 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{
-        duration: 1.15,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      className="min-h-screen bg-[#ecebe6] text-[#171717]"
-    >
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <motion.section
-          initial={{ opacity: 0, y: 45, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{
-            duration: 1,
-            delay: 0.14,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className="mb-6 rounded-[32px] border border-black/5 bg-white/60 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.05)] backdrop-blur"
+    <main className="min-h-screen text-white overflow-x-hidden">
+      <div className="mx-auto max-w-6xl px-4 py-24 md:px-6 space-y-5">
+
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-3xl p-6"
+          style={GLASS}
         >
-          <div className="rounded-[26px] border border-black/5 bg-[#f7f6f2] p-4 md:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm text-[#7a7a7a]">School Life</p>
-                <h1 className="text-3xl font-extrabold">학사일정</h1>
-                <p className="mt-1 text-sm text-[#666]">{schoolName}</p>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSearchOpen((prev) => !prev)}
-                  className="rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-[#444] shadow-sm transition-all duration-500 hover:-translate-y-1"
-                >
-                  타학교 검색
-                </button>
-
-                <Link
-                  href="/"
-                  className="rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm font-semibold text-[#444] shadow-sm transition-all duration-500 hover:-translate-y-1"
-                >
-                  메인화면으로 이동
-                </Link>
-              </div>
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/28 mb-1">School Life</p>
+              <h1 className="text-[clamp(28px,5vw,44px)] font-black tracking-[-0.04em] text-white">학사일정</h1>
+              <p className="text-[12px] text-white/35 mt-1">{schoolName}</p>
             </div>
-
-            {searchOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: 24, scale: 0.99 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  duration: 0.55,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-                className="mt-4 rounded-[22px] border border-black/5 bg-white p-4"
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSearchOpen((p) => !p)}
+                className="rounded-full px-4 py-2.5 text-[12px] font-semibold text-white/45 hover:text-white/75 transition-colors"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
               >
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    value={searchName}
-                    onChange={(e) => setSearchName(e.target.value)}
-                    placeholder="학교 이름 입력"
-                    className="flex-1 rounded-2xl border border-black/5 bg-[#fafafa] px-4 py-3 outline-none"
-                  />
-                  <button
-                    onClick={handleSearchSchool}
-                    className="rounded-2xl bg-[#171717] px-5 py-3 text-sm font-bold text-white transition-all duration-500 hover:-translate-y-1"
-                  >
-                    검색
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {searchLoading ? (
-                    <p className="text-sm text-[#666]">학교를 찾는 중입니다...</p>
-                  ) : searchResults.length === 0 ? (
-                    <p className="text-sm text-[#777]">
-                      학교 이름을 입력한 뒤 검색해 주세요.
-                    </p>
-                  ) : (
-                    searchResults.map((school, index) => (
-                      <motion.button
-                        key={`${school.schoolCode}-${index}`}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          delay: index * 0.05,
-                          duration: 0.5,
-                          ease: [0.22, 1, 0.36, 1],
-                        }}
-                        onClick={() => handleSelectSchool(school.schoolName)}
-                        className="block w-full rounded-2xl border border-black/5 bg-[#fafafa] px-4 py-4 text-left transition-all duration-500 hover:-translate-y-1"
-                      >
-                        <p className="font-bold text-[#171717]">{school.schoolName}</p>
-                        <p className="mt-1 text-sm text-[#666]">
-                          {school.schoolType}
-                          {school.address ? ` · ${school.address}` : ""}
-                        </p>
-                      </motion.button>
-                    ))
-                  )}
-                </div>
-              </motion.div>
-            )}
+                타학교 검색
+              </button>
+              <Link
+                href="/"
+                className="rounded-full px-4 py-2.5 text-[12px] font-semibold text-white/45 hover:text-white/75 transition-colors"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+              >
+                메인화면
+              </Link>
+            </div>
           </div>
-        </motion.section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 55, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{
-            duration: 1.05,
-            delay: 0.22,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className="rounded-[32px] border border-black/5 bg-white/60 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.05)]"
-        >
-          <div className="rounded-[26px] border border-black/5 bg-[#f7f6f2] p-5">
-            <div className="mb-4 flex items-center justify-between gap-2 md:mb-5">
-              <button
-                onClick={handlePrevMonth}
-                className="rounded-2xl border border-black/5 bg-white px-3 py-2 text-sm font-bold text-[#444] transition-all duration-500 hover:-translate-y-1 md:px-4 md:py-3"
-              >
-                ← 이전달
-              </button>
-
-              <h2 className="text-xl font-extrabold tracking-[-0.03em] sm:text-2xl">
-                {getMonthLabel(year, month)}
-              </h2>
-
-              <button
-                onClick={handleNextMonth}
-                className="rounded-2xl border border-black/5 bg-white px-3 py-2 text-sm font-bold text-[#444] transition-all duration-500 hover:-translate-y-1 md:px-4 md:py-3"
-              >
-                다음달 →
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="rounded-[24px] border border-black/5 bg-white p-6 text-center">
-                <p className="text-[#666]">학사일정을 불러오는 중입니다...</p>
+          {searchOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-4 rounded-2xl p-4"
+              style={GLASS_SUBTLE}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={searchName}
+                  onChange={(e) => setSearchName(e.target.value)}
+                  placeholder="학교 이름 입력"
+                  className="flex-1 rounded-xl px-4 py-3 text-[13px] text-white/75 placeholder:text-white/20 outline-none"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                />
+                <button
+                  onClick={handleSearchSchool}
+                  className="rounded-xl bg-white px-5 py-3 text-[12px] font-bold text-black hover:bg-white/90 transition-colors"
+                >
+                  검색
+                </button>
               </div>
-            ) : (
-              <div className="overflow-hidden rounded-[24px] border border-black/5 bg-white">
-                <div className="grid grid-cols-7 border-b border-black/5 bg-[#faf9f5]">
-                  {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                    <div
-                      key={day}
-                      className="px-1 py-2 text-center text-xs font-bold text-[#666] md:px-3 md:py-3 md:text-sm"
+              <div className="mt-3 space-y-2">
+                {searchLoading ? (
+                  <p className="text-[12px] text-white/35">학교를 찾는 중입니다...</p>
+                ) : searchResults.length === 0 ? (
+                  <p className="text-[12px] text-white/28">학교 이름을 입력한 뒤 검색해 주세요.</p>
+                ) : (
+                  searchResults.map((school, index) => (
+                    <motion.button
+                      key={`${school.schoolCode}-${index}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => handleSelectSchool(school.schoolName)}
+                      className="block w-full rounded-xl px-4 py-3.5 text-left hover:-translate-y-0.5 transition-all"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
                     >
-                      {day}
+                      <p className="font-bold text-white text-[13px]">{school.schoolName}</p>
+                      <p className="text-[11px] text-white/35 mt-0.5">{school.schoolType}{school.address ? ` · ${school.address}` : ""}</p>
+                    </motion.button>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* Calendar */}
+        <motion.div
+          initial={{ opacity: 0, y: 32 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-3xl p-6"
+          style={GLASS}
+        >
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+          <div className="flex items-center justify-between mb-5 gap-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handlePrevMonth}
+              className="rounded-full px-4 py-2.5 text-[12px] font-bold text-white/45 hover:text-white/75 transition-colors"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+            >
+              ← 이전달
+            </motion.button>
+            <AnimatePresence mode="wait">
+              <motion.h2
+                key={`${year}-${month}`}
+                initial={{ opacity: 0, y: calendarDirection > 0 ? 14 : -14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: calendarDirection > 0 ? -14 : 14 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="text-[clamp(16px,3vw,22px)] font-black tracking-[-0.04em] text-white"
+              >
+                {getMonthLabel(year, month)}
+              </motion.h2>
+            </AnimatePresence>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleNextMonth}
+              className="rounded-full px-4 py-2.5 text-[12px] font-bold text-white/45 hover:text-white/75 transition-colors"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
+            >
+              다음달 →
+            </motion.button>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((n) => (
+                <motion.div
+                  key={n}
+                  animate={{ opacity: [0.25, 0.5, 0.25] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: n * 0.12 }}
+                  className="grid grid-cols-7 rounded-2xl overflow-hidden"
+                  style={GLASS_SUBTLE}
+                >
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <div key={i} className="min-h-[72px] md:min-h-[90px] p-2">
+                      <div className="h-3 w-5 rounded-full mb-2" style={{ background: "rgba(255,255,255,0.06)" }} />
                     </div>
                   ))}
-                </div>
-
-                <div className="relative overflow-hidden">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={`${year}-${month}`}
-                      initial={{
-                        opacity: 0,
-                        x: calendarDirection > 0 ? 70 : -70,
-                      }}
-                      animate={{
-                        opacity: 1,
-                        x: 0,
-                      }}
-                      exit={{
-                        opacity: 0,
-                        x: calendarDirection > 0 ? -70 : 70,
-                      }}
-                      transition={{
-                        duration: 0.45,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                    >
-                      {weeks.map((week, weekIndex) => (
-                        <div
-                          key={weekIndex}
-                          className="grid grid-cols-7 border-b last:border-b-0 border-black/5"
-                        >
-                          {week.map((cell, cellIndex) => {
-                            if (!cell.day) {
-                              return (
-                                <div
-                                  key={cellIndex}
-                                  className="min-h-[80px] md:min-h-[120px] bg-[#fcfcfa]"
-                                />
-                              );
-                            }
-
-                            const key = formatDateKey(year, month, cell.day);
-                            const dayItems = scheduleMap.get(key) || [];
-                            const isToday = key === todayKey;
-
-                            return (
-                              <motion.button
-                                key={cellIndex}
-                                initial={{ opacity: 0, y: 18 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{
-                                  delay: weekIndex * 0.025 + cellIndex * 0.012,
-                                  duration: 0.38,
-                                  ease: [0.22, 1, 0.36, 1],
-                                }}
-                                onClick={() => dayItems.length > 0 && setSelectedDate(key)}
-                                className={`min-h-[72px] border-r last:border-r-0 border-black/5 p-2 text-left transition-all duration-500 hover:bg-[#faf9f5] md:min-h-[120px] md:p-3 ${
-                                  isToday
-                                    ? "bg-[#f3f0e8] ring-1 ring-inset ring-[#bfb7a7]"
-                                    : "bg-white"
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-1">
-                                  <p className="text-[11px] font-bold text-[#222] md:text-sm">
-                                    {cell.day}
-                                  </p>
-
-                              </div>
-
-                                {dayItems.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {dayItems.slice(0, 1).map((item, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="truncate rounded-full bg-[#efede6] px-1.5 py-[2px] text-[9px] font-semibold text-[#666] md:rounded-xl md:px-2 md:py-1 md:text-xs"
-                                      >
-                                        {item.eventName}
-                                      </div>
-                                    ))}
-
-                                    {dayItems.length > 2 && (
-                                      <p className="text-xs text-[#777]">
-                                        +{dayItems.length - 2}개 더보기
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </motion.button>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl" style={GLASS_SUBTLE}>
+              {/* Day headers */}
+              <div className="grid grid-cols-7 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                {["일", "월", "화", "수", "목", "금", "토"].map((day, i) => (
+                  <div key={day} className="px-1 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider"
+                    style={{ color: i === 0 ? "rgba(239,68,68,0.6)" : i === 6 ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.22)" }}>
+                    {day}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
-        </motion.section>
+
+              <div className="relative overflow-hidden">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={`${year}-${month}`}
+                    initial={{ opacity: 0, x: calendarDirection > 0 ? 60 : -60 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: calendarDirection > 0 ? -60 : 60 }}
+                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {weeks.map((week, weekIndex) => (
+                      <div key={weekIndex} className="grid grid-cols-7 border-b last:border-b-0" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+                        {week.map((cell, cellIndex) => {
+                          if (!cell.day) {
+                            return <div key={cellIndex} className="min-h-[72px] md:min-h-[110px]" style={{ background: "rgba(0,0,0,0.08)" }} />;
+                          }
+                          const key = formatDateKey(year, month, cell.day);
+                          const dayItems = scheduleMap.get(key) || [];
+                          const isToday = key === todayKey;
+                          const isSun = cellIndex === 0;
+                          const isSat = cellIndex === 6;
+
+                          return (
+                            <motion.button
+                              key={cellIndex}
+                              initial={{ opacity: 0, scale: 0.92 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              whileHover={dayItems.length > 0 ? { scale: 1.03, zIndex: 2 } : { backgroundColor: "rgba(255,255,255,0.025)" }}
+                              whileTap={{ scale: 0.97 }}
+                              transition={{ delay: weekIndex * 0.025 + cellIndex * 0.012, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                              onClick={() => dayItems.length > 0 && setSelectedDate(key)}
+                              className="min-h-[72px] md:min-h-[110px] border-r last:border-r-0 p-2 md:p-2.5 text-left relative overflow-hidden"
+                              style={{
+                                borderColor: "rgba(255,255,255,0.04)",
+                                background: isToday ? "rgba(139,92,246,0.12)" : dayItems.length > 0 ? "rgba(255,255,255,0.025)" : "transparent",
+                                outline: isToday ? "1px solid rgba(139,92,246,0.3)" : undefined,
+                                outlineOffset: "-1px",
+                                cursor: dayItems.length > 0 ? "pointer" : "default",
+                              }}
+                            >
+                              <p className="text-[11px] font-bold md:text-[13px]"
+                                style={{ color: isToday ? "rgba(167,139,250,0.95)" : isSun ? "rgba(239,68,68,0.55)" : isSat ? "rgba(96,165,250,0.55)" : "rgba(255,255,255,0.55)" }}>
+                                {cell.day}
+                              </p>
+                              {dayItems.length > 0 && (
+                                <div className="mt-1.5 space-y-0.5">
+                                  {dayItems.slice(0, 2).map((item, idx) => (
+                                    <div key={idx}
+                                      className="truncate rounded-full px-1.5 py-0.5 text-[8px] font-semibold md:rounded-lg md:px-2 md:py-0.5 md:text-[9px]"
+                                      style={{ background: "rgba(139,92,246,0.2)", color: "rgba(167,139,250,0.85)" }}>
+                                      {item.eventName}
+                                    </div>
+                                  ))}
+                                  {dayItems.length > 2 && (
+                                    <p className="text-[8px] text-white/25">+{dayItems.length - 2}개</p>
+                                  )}
+                                </div>
+                              )}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+        </motion.div>
       </div>
 
+      {/* Schedule detail modal */}
       <AnimatePresence>
         {selectedDate && selectedItems.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}
             onClick={() => setSelectedDate(null)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 35, scale: 0.96 }}
+              initial={{ opacity: 0, y: 30, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.98 }}
-              transition={{
-                duration: 0.45,
-                ease: [0.22, 1, 0.36, 1],
-              }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xl rounded-[30px] border border-black/5 bg-[#f7f6f2] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.14)]"
+              className="relative w-full max-w-xl overflow-hidden rounded-3xl p-6"
+              style={GLASS}
             >
-              <div className="mb-4 flex items-center justify-between">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/22 to-transparent" />
+              <div className="flex items-center justify-between mb-5">
                 <div>
-                  <p className="text-sm text-[#777]">학사일정 상세</p>
-                  <h3 className="text-2xl font-extrabold">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/25 mb-1">학사일정 상세</p>
+                  <h3 className="text-[20px] font-black tracking-[-0.04em] text-white">
                     {selectedDate.slice(0, 4)}.{selectedDate.slice(4, 6)}.{selectedDate.slice(6, 8)}
                   </h3>
                 </div>
-
                 <button
                   onClick={() => setSelectedDate(null)}
-                  className="rounded-2xl border border-black/5 bg-white px-4 py-2 text-sm font-bold text-[#444]"
+                  className="rounded-full px-4 py-2 text-[12px] font-semibold text-white/45 hover:text-white/75 transition-colors"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
                 >
                   닫기
                 </button>
               </div>
-
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {selectedItems.map((item, index) => (
-                  <div
+                  <motion.div
                     key={index}
-                    className="rounded-[22px] border border-black/5 bg-white p-4"
+                    initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ delay: 0.1 + index * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                    className="rounded-2xl p-4"
+                    style={GLASS_SUBTLE}
                   >
-                    <p className="text-lg font-extrabold text-[#171717]">
-                      {item.eventName}
-                    </p>
-
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgba(139,92,246,0.8)" }} />
+                      <p className="font-black text-white text-[15px] tracking-[-0.02em]">{item.eventName}</p>
+                    </div>
                     {item.content ? (
-                      <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[#555]">
-                        {item.content}
-                      </pre>
+                      <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-[12px] leading-6 text-white/45 pl-3.5">{item.content}</pre>
                     ) : (
-                      <p className="mt-3 text-sm text-[#777]">
-                        상세 내용이 등록되지 않았습니다.
-                      </p>
+                      <p className="mt-2 text-[12px] text-white/28 pl-3.5">상세 내용이 등록되지 않았습니다.</p>
                     )}
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.main>
+    </main>
   );
 }

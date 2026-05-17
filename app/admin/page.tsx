@@ -346,10 +346,31 @@ export default function AdminPage() {
             </Link>
 
             <Link
+              href="/admin/users"
+              className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 shadow-sm"
+            >
+              👥 사용자 관리
+            </Link>
+
+            <Link
+              href="/admin/stock-sim"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
+            >
+              📈 모의주식 관리
+            </Link>
+
+            <Link
               href="/admin/phrases"
               className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
             >
               논어 / 사자성어 관리
+            </Link>
+
+            <Link
+              href="/admin/stock"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm"
+            >
+              주식 퀴즈 관리
             </Link>
           </div>
         </div>

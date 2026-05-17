@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -16,6 +17,13 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 
+  emailVerified    Boolean  @default(false)
+  verifyCode       String?
+  verifyCodeExpiry DateTime?
+
+  resetCode        String?
+  resetCodeExpiry  DateTime?
+
   lastSeenAt       DateTime?
   loginCount       Int      @default(0)
   totalStudySeconds Int     @default(0)
@@ -23,7 +31,9 @@ model User {
   correctAnswers   Int      @default(0)
 
   rankings         RankingRecord[]
-  wrongNotes        WrongAnswerNote[]
+  wrongNotes       WrongAnswerNote[]
+  stockPortfolio   StockPortfolio?
+  stockTrades      StockTrade[]
 }
 
 model HanjaItem {
@@ -62,6 +72,64 @@ model WrongAnswerNote {
   @@unique([userId, contentType, contentId])
 }
 
+model StockHanja {
+  id        Int      @id @default(autoincrement())
+  character String
+  meaning   String
+  reading   String
+  createdAt DateTime @default(now())
+}
+
+model StockNewsQuestion {
+  id           Int      @id @default(autoincrement())
+  newsTitle    String
+  newsExcerpt  String
+  question     String
+  answer       String
+  wrongAnswer1 String
+  wrongAnswer2 String
+  wrongAnswer3 String
+  source       String   @default("")
+  createdAt    DateTime @default(now())
+}
+
+model StockPortfolio {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  cash      Float    @default(2000000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holdings  StockHolding[]
+}
+
+model StockHolding {
+  id          Int    @id @default(autoincrement())
+  portfolioId Int
+  ticker      String
+  name        String
+  market      String  // "KR" | "US"
+  quantity    Int
+  avgPrice    Float
+  portfolio   StockPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, ticker])
+}
+
+model StockTrade {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  ticker    String
+  name      String
+  market    String
+  type      String   // "BUY" | "SELL"
+  quantity  Int
+  price     Float
+  total     Float
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model PhraseItem {
   id           Int      @id @default(autoincrement())
   category     String   // "analects" | "idiom"
@@ -71,4 +139,30 @@ model PhraseItem {
   hanjaTokens  String   // "|" 로 구분: 學而|時習之|不亦|說乎
   koreanTokens String   // "|" 로 구분: 배우고|때때로|익히면|또한|기쁘지|아니한가
   createdAt    DateTime @default(now())
+}
+
+// ── 게시판 전용 모델 ──────────────────────────────────────────────────────
+
+model BoardUser {
+  id        Int      @id @default(autoincrement())
+  userId    String   @unique  // 사용자가 입력하는 아이디
+  password  String            // bcrypt hashed
+  nickname  String
+  createdAt DateTime @default(now())
+
+  posts     Post[]
+}
+
+model Post {
+  id         Int       @id @default(autoincrement())
+  title      String
+  content    String
+  grade      String    @default("")
+  subject    String    @default("")
+  fileName   String    @default("")   // Supabase Storage object path (or "")
+  date       String    @default("")
+  createdAt  DateTime  @default(now())
+
+  authorId   Int
+  author     BoardUser @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
